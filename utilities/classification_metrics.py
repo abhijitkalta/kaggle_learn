@@ -172,8 +172,8 @@ class TestClassificationMetrics(unittest.TestCase):
                          "Incorrect sensitivity")
 
 
+        
 if __name__ == '__main__':
-    
     precisions, recalls = ClassificationMetrics().plot_precision_recall()
     #plt.plot(recalls, precisions)
     #plt.xlabel('Recalls')
