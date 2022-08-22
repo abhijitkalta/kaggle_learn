@@ -1,6 +1,9 @@
 import unittest
 from sklearn import metrics
 import matplotlib.pyplot as plt
+import pandas as pd
+import numpy as np
+from collections import Counter
 
 class ClassificationMetrics:
     
@@ -104,12 +107,112 @@ class ClassificationMetrics:
     def tpr_sensitivity(self, y_true, y_pred):
         return self.recall(y_true, y_pred)
     
+    def fpr(self, y_true, y_pred):
+        fp = self.false_positive(y_true, y_pred)
+        tn = self.false_negative(y_true, y_pred)
+        
+        fpr = fp / ( fp + tn )
+        return fpr
     
+    def plot_roc(self):
+        y_true = [0, 0, 0, 0, 1, 0, 1,  0, 0, 1, 0, 1, 0, 0, 1] 
+        y_prob = [0.1, 0.3, 0.2, 0.6, 0.8, 0.05,  0.9, 0.5, 0.3, 0.66, 0.3, 0.2,  0.85, 0.15, 0.99]
+        thresholds = [0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.85, 0.9, 0.99, 1.0] 
+        
+        tprs = []
+        fprs = []
+        
+        for thres in thresholds:
+            y_pred = [ 1 if x >= thres else 0 for x in y_prob ]
+            tpr = self.tpr_sensitivity(y_true, y_pred)
+            fpr = self.fpr(y_true, y_pred)
+            tprs.append(tpr)
+            fprs.append(fpr)
+        
+        data = {
+            'tpr': tprs,
+            'fpr': fprs,
+            'thresholds': thresholds
+        }
+        roc_df = pd.DataFrame(data)
+        
+        return roc_df
+    
+    
+    def log_loss(self, y_true, y_prob):
+        losses = []
+        epsilon = 1e-15
+        for yt, yp in zip(y_true, y_prob):
+            yp = np.clip(yp, epsilon, 1-epsilon)
+            loss = -1 * (yt * np.log(yp) + (1-yt)*(np.log( 1 - yp)))
+            losses.append(loss)
+        
+        return np.mean(losses)
+    
+    def macro_precision(self, y_true, y_pred):
+        num_classes = len(pd.unique(y_true))
+        
+        precision = 0
+        
+        for class_ in range(num_classes):
+            temp_true = [1 if p == class_ else 0 for p in y_true]
+            temp_pred = [1 if p == class_ else 0 for p in y_pred]
+            
+            tp = self.true_positive(temp_true, temp_pred)
+            fp = self.false_positive(temp_true, temp_pred)
+            
+            temp_precision = tp / (tp + fp)
+            precision += temp_precision
+        
+        return precision/(num_classes)
+    
+    def micro_precision(self, y_true, y_pred):
+        num_classes = len(pd.unique(y_true))
+        
+        tp = 0
+        fp = 0
+        
+        for class_ in range(num_classes):
+            
+            temp_true = [1 if p == class_ else 0 for p in y_true]
+            temp_pred = [1 if p == class_ else 0 for p in y_pred]
+            
+            temp_tp = self.true_positive(temp_true, temp_pred)
+            temp_fp = self.false_positive(temp_true, temp_pred)
+            
+            tp += temp_tp
+            fp += temp_fp
+        
+        precision = tp / (tp + fp)
+        return precision
+    
+    def weighted_precision(self, y_true, y_pred):
+        num_classes = len(pd.unique(y_true))
+        class_counts = Counter(y_true)
+        
+        precision = 0
+        
+        for class_ in range(num_classes):
+            temp_true = [1 if p == class_ else 0 for p in y_true]
+            temp_pred = [1 if p == class_ else 0 for p in y_pred]
+            
+            tp = self.true_positive(temp_true, temp_pred)
+            fp = self.false_positive(temp_true, temp_pred)
+            
+            temp_precision = tp / (tp + fp)
+            weighted_precision = class_counts[class_] * temp_precision
+            precision += weighted_precision
+        
+        return precision/(len(y_true))
+    
+        
 class TestClassificationMetrics(unittest.TestCase):
     @classmethod
     def setUpClass(self):
         self.l1 = [0, 1, 1, 1, 0, 0, 0, 1]
         self.l2 = [0, 1, 0, 1, 0, 1, 0, 0]
+        self.l3 = [0, 0, 0, 0, 1, 0, 1, 0, 0, 1, 0, 1, 0, 0, 1] 
+        self.l4 =  [0.1, 0.3, 0.2, 0.6, 0.8, 0.05, 0.9, 0.5, 0.3, 0.66, 0.3, 0.2, 0.85, 0.15, 0.99] 
         self.classification_metrics = ClassificationMetrics()
     
     def test_accuracy(self):
@@ -170,13 +273,56 @@ class TestClassificationMetrics(unittest.TestCase):
         self.assertEqual(self.classification_metrics.tpr_sensitivity(self.l1, self.l2),
                          tpr,
                          "Incorrect sensitivity")
+        
+    
+    def test_log_loss(self):
+        log_loss = metrics.log_loss(self.l3, self.l4)
+        self.assertEqual(self.classification_metrics.log_loss(self.l3, self.l4),
+                         log_loss,
+                         "Incorrect log loss")
+        
+    
+    def test_macro_precision(self):
+        macro_precision = metrics.precision_score(self.l1, self.l2, average = 'macro')
+        self.assertEqual(self.classification_metrics.macro_precision(self.l1, self.l2),
+                         macro_precision,
+                         "Incorrect macro precision")
+        
+    def test_micro_precision(self):
+        micro_precision = metrics.precision_score(self.l1, self.l2, average = 'micro')
+        self.assertEqual(self.classification_metrics.micro_precision(self.l1, self.l2),
+                         micro_precision,
+                         "Incorrect micro precision")
+        
+    def test_weighted_precision(self):
+        weighted_precision = metrics.precision_score(self.l1, self.l2, average = 'weighted')
+        self.assertEqual(self.classification_metrics.weighted_precision(self.l1, self.l2),
+                         weighted_precision,
+                         "Incorrect weighted precision")
+
+
 
 
         
 if __name__ == '__main__':
     precisions, recalls = ClassificationMetrics().plot_precision_recall()
+    
+    #plt.figure(figsize = (8, 8))
     #plt.plot(recalls, precisions)
     #plt.xlabel('Recalls')
     #plt.ylabel('Precisions')
     #plt.show()
+    
+    roc_df = ClassificationMetrics().plot_roc()
+    print(roc_df)
+    #plt.figure(figsize = (8, 8))
+    #plt.plot(roc_df['fpr'], roc_df['tpr'])
+    #plt.fill_between(roc_df['fpr'], roc_df['tpr'], alpha = 0.4)
+    #plt.xlabel('FPR')
+    #plt.ylabel('TPR')
+    #plt.xlim(0, 1)
+    #plt.ylim(0, 1)
+    #plt.show();
+    
+    
     unittest.main()
