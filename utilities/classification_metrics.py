@@ -205,6 +205,33 @@ class ClassificationMetrics:
         
         return precision/(len(y_true))
     
+    def pk(self, y_true, y_pred, k):
+        if k == 0:
+            return 0
+        
+        y_pred = y_pred[:k]
+        pred_set = set(y_pred)
+        true_set = set(y_true)
+        common_values = pred_set.intersection(true_set)
+        
+        return len(common_values) / len(y_pred[:k])
+    
+    def apk(self, y_true, y_pred, k):
+        pk_values = []
+        for i in range(1, k+1):
+            pk_values.append(self.pk(y_true, y_pred, i))
+        
+        if len(pk_values) == 0:
+            return 0
+        
+        return sum(pk_values) / len(pk_values)
+    
+    def mapk(self, y_true, y_pred, k):
+        apk_values = []
+        for i in range(len(y_true)):
+            apk_values.append(self.apk(y_true[i], y_pred[i], k = k))
+        
+        return sum(apk_values) / len(apk_values)
         
 class TestClassificationMetrics(unittest.TestCase):
     @classmethod
@@ -213,6 +240,8 @@ class TestClassificationMetrics(unittest.TestCase):
         self.l2 = [0, 1, 0, 1, 0, 1, 0, 0]
         self.l3 = [0, 0, 0, 0, 1, 0, 1, 0, 0, 1, 0, 1, 0, 0, 1] 
         self.l4 =  [0.1, 0.3, 0.2, 0.6, 0.8, 0.05, 0.9, 0.5, 0.3, 0.66, 0.3, 0.2, 0.85, 0.15, 0.99] 
+        self.l5 =  [ [1, 2, 3], [0, 2], [1], [2, 3], [1, 0], []] 
+        self.l6 = [ [0, 1, 2], [1], [0, 2, 3], [2, 3, 4, 0], [0, 1, 2], [0]] 
         self.classification_metrics = ClassificationMetrics()
     
     def test_accuracy(self):
@@ -299,8 +328,19 @@ class TestClassificationMetrics(unittest.TestCase):
         self.assertEqual(self.classification_metrics.weighted_precision(self.l1, self.l2),
                          weighted_precision,
                          "Incorrect weighted precision")
-
-
+        
+    def test_mapk(self):
+        for i in range(len(self.l5)):
+            for j in range(1, 4):
+                print(f"""
+                    y_true = {self.l5[i]},
+                    y_pred = {self.l6[i]},
+                    AP@{j} = {self.classification_metrics.apk(self.l5[i], self.l6[i], k = j)}
+                    """
+                     )
+        self.assertEqual(self.classification_metrics.mapk(self.l5, self.l6, k = 2),
+                         0.375,
+                         "Incorrect mean average precision @ 2")
 
 
         
