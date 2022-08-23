@@ -6,7 +6,9 @@ import pandas as pd
 from sklearn import metrics
 from sklearn import tree
 
-def run(fold):
+import model_dispatcher
+
+def run(fold, model):
     df = pd.read_csv(config.TRAINING_FILE)
     
     df_train = df[df.kfold != fold].reset_index(drop = True)
@@ -18,7 +20,7 @@ def run(fold):
     x_valid = df_valid.drop('target', axis = 1).values
     y_valid = df_valid['target'].values
     
-    clf = tree.DecisionTreeClassifier()
+    clf = model_dispatcher.models[model]
     
     clf.fit(x_train, y_train)
     
@@ -29,7 +31,7 @@ def run(fold):
     
     joblib.dump(
         clf, 
-        os.path.join(config.MODEL_OUTPUT, f"dt_{fold}.bin")
+        os.path.join(config.MODEL_OUTPUT, f"{model}_{fold}.bin")
     )
     
     
@@ -41,7 +43,15 @@ if __name__ == '__main__':
         type = int
     )
     
+    parser.add_argument(
+        '--model',
+        type = str
+    )
+    
     args = parser.parse_args()
     
-    run(fold=args.fold)
+    run(
+        fold=args.fold,
+        model = args.model
+    )
     
